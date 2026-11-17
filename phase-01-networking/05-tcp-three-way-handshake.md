@@ -13,9 +13,9 @@
 
 The objective of this lab was to capture and analyze a complete TCP connection using Wireshark.
 
-The investigation focused on understanding how TCP establishes connections, how HTTP requests and responses travel through them, and how TCP connections terminate gracefully.
+The investigation focused on understanding how TCP establishes connections, how HTTP requests and responses travel through them, and how connections terminate gracefully.
 
-We also inspected TCP flags, ports, sequence numbers, acknowledgment numbers, and HTTP status codes.
+We also examined TCP ports, flags, sequence numbers, acknowledgment numbers, and HTTP status codes.
 
 ## 2. Lab Environment
 
@@ -36,27 +36,31 @@ We also inspected TCP flags, ports, sequence numbers, acknowledgment numbers, an
 
 **TCP (Transmission Control Protocol)**
 
-A transport-layer protocol providing reliable, ordered communication between applications.
+A transport-layer protocol that provides reliable, ordered communication between applications.
 
 **Three-Way Handshake**
 
-TCP establishes a connection using three packets:
+TCP establishes a connection through three steps:
 
-1. SYN — Client initiates the connection.
-2. SYN-ACK — Server acknowledges and responds.
-3. ACK — Client acknowledges the server, completing the handshake.
+1. SYN — The client requests a connection.
+2. SYN-ACK — The server acknowledges the request and sends its own SYN.
+3. ACK — The client acknowledges the server, completing the handshake.
 
 **TCP Ports**
 
-Ports identify application endpoints. The client used temporary port `34942`, while the server received the connection on HTTP port `80`.
+Ports identify application endpoints. In this lab, Kali used temporary source port `34942`, while the HTTP server listened on port `80`.
 
-**Sequence and Acknowledgment Numbers**
+**Sequence Numbers**
 
-Sequence numbers track positions in the TCP byte stream. Acknowledgment numbers indicate the next sequence number expected from the other endpoint.
+Sequence numbers track positions in the TCP byte stream, helping TCP maintain ordered communication.
+
+**Acknowledgment Numbers**
+
+Acknowledgment numbers indicate the next sequence number expected from the other endpoint.
 
 **HTTP (Hypertext Transfer Protocol)**
 
-An application-layer protocol used to exchange web requests and responses.
+An application-layer protocol used for communication between web clients and servers.
 
 **FIN (Finish)**
 
@@ -66,9 +70,9 @@ A TCP flag indicating that a device has finished sending data and wants to close
 
 ### Step 1 — Capturing TCP Traffic
 
-Started Wireshark on the `eth0` network interface.
+Started Wireshark and selected the `eth0` interface.
 
-Executed the following command in the Kali terminal:
+Generated HTTP traffic using the Kali terminal:
 
 ```bash
 curl -4 -v --http1.1 http://example.com/
@@ -82,17 +86,17 @@ Command explanation:
 - `--http1.1` — Requests HTTP/1.1.
 - `http://example.com/` — Target website.
 
-After generating the traffic, stopped the capture and applied the display filter:
+Stopped the capture and applied the display filter:
 
 ```text
 tcp
 ```
 
-The captured packets included the TCP handshake, HTTP request, HTTP response, and connection termination.
+The captured packets showed the TCP handshake, HTTP communication, and connection termination.
 
-### Step 2 — Source and Destination Port Inspection
+### Step 2 — TCP Source and Destination Ports
 
-Selected packet No. 1, the initial SYN packet.
+Selected packet No. 1, containing the initial SYN request.
 
 Observed:
 
@@ -103,59 +107,68 @@ Observed:
 | Source Port | 34942 |
 | Destination Port | 80 |
 
-The source port was an ephemeral port selected by Kali for this connection.
+The source port was an ephemeral port assigned to the client connection.
 
-Port `80` was the destination service port used for HTTP communication.
+The destination port `80` identified the HTTP service.
 
-The server's response reversed the source and destination ports.
+When the server responded, the source and destination ports were reversed.
 
 **Evidence: TCP Source and Destination Ports**
 
-![TCP source and destination ports](05-tcp-source-destination-ports.png)
+![TCP source and destination ports](evidence/05-tcp-source-destination-ports.png)
 
 ### Step 3 — TCP Three-Way Handshake
 
-Inspected the first three packets.
+Inspected the first three TCP packets.
 
-| Packet | Flags | Hex Value | Direction |
+| Packet | Direction | Flags | Hex Value |
 |---|---|---|---|
-| 1 | SYN | 0x02 | Kali → Server |
-| 2 | SYN, ACK | 0x12 | Server → Kali |
-| 3 | ACK | 0x10 | Kali → Server |
+| 1 | Kali → Server | SYN | 0x02 |
+| 2 | Server → Kali | SYN, ACK | 0x12 |
+| 3 | Kali → Server | ACK | 0x10 |
 
 **Packet 1 — SYN**
 
-Kali initiated the connection by sending a SYN packet to the server.
+Kali initiated the TCP connection by sending a SYN packet.
+
+The SYN flag tells the server that the client wants to establish communication.
 
 **Packet 2 — SYN-ACK**
 
-The server acknowledged Kali's request and sent its own SYN.
+The server responded with both SYN and ACK flags set.
 
-Both the SYN and ACK flags were set.
+- SYN indicated that the server was synchronizing its own sequence numbers.
+- ACK acknowledged the client's SYN request.
+
+The combined hexadecimal flag value was `0x12`.
 
 **Evidence: TCP SYN-ACK Flags**
 
-![TCP SYN and ACK flags inspection](05-tcp-syn-ack-flags.png)
+![TCP SYN and ACK flag inspection](evidence/05-tcp-syn-ack-flags.png)
 
 **Packet 3 — ACK**
 
-Kali acknowledged the server's SYN, completing the TCP three-way handshake.
+Kali sent the final acknowledgment, completing the handshake.
 
-Observed relative sequence and acknowledgment numbers:
+Observed relative values:
 
-- Sequence Number: `1`
-- Acknowledgment Number: `1`
-- ACK Flag: Set
+| Field | Value |
+|---|---|
+| Sequence Number | 1 |
+| Acknowledgment Number | 1 |
+| ACK Flag | Set |
 
-The SYN packets each consumed one sequence number. Wireshark displayed relative sequence numbers to simplify analysis.
+The SYN packets each consumed one sequence number.
+
+Wireshark displayed relative sequence numbers, making the connection easier to analyze.
 
 **Evidence: TCP Sequence and Acknowledgment Numbers**
 
-![TCP sequence and acknowledgment number inspection](05-tcp-sequence-acknowledgment.png)
+![TCP sequence and acknowledgment numbers](evidence/05-tcp-sequence-acknowledgment.png)
 
-### Step 4 — HTTP GET Request Analysis
+### Step 4 — HTTP GET Request
 
-After establishing the TCP connection, Kali sent an HTTP request.
+After the TCP connection was established, Kali sent an HTTP request.
 
 Selected packet No. 4.
 
@@ -166,18 +179,18 @@ GET / HTTP/1.1
 Host: example.com
 ```
 
-**Field explanations:**
+Explanation:
 
 - `GET` — Requests a resource from the server.
-- `/` — Represents the root path of the website.
-- `HTTP/1.1` — Specifies the HTTP version.
+- `/` — Represents the website's root path.
+- `HTTP/1.1` — Specifies the HTTP protocol version.
 - `Host: example.com` — Identifies the requested website.
 
-This demonstrated how HTTP application data is transmitted after TCP connection establishment.
+This showed how HTTP application data is transmitted after the TCP handshake.
 
 **Evidence: HTTP GET Request**
 
-![HTTP GET request and Host header](05-http-get-request.png)
+![HTTP GET request and Host header](evidence/05-http-get-request.png)
 
 ### Step 5 — HTTP Response Analysis
 
@@ -193,15 +206,21 @@ Observed:
 | Content Type | text/html |
 | Server Header | cloudflare |
 
-**HTTP 200 OK** indicates that the HTTP request was successfully handled.
+The response contained:
 
-This is different from TCP connection success. A TCP connection can be established even when an HTTP request returns an error.
+```http
+HTTP/1.1 200 OK
+```
+
+**HTTP 200 OK** indicates that the server successfully handled the HTTP request.
+
+A successful TCP handshake does not necessarily mean that an HTTP request will succeed. The HTTP response status provides additional information about the application's response.
 
 Wireshark also showed that the HTTP response was reassembled from TCP segments.
 
-**Evidence: Successful HTTP Response**
+**Evidence: HTTP 200 OK Response**
 
-![HTTP 200 OK response analysis](05-http-200-ok-response.png)
+![HTTP 200 OK response analysis](evidence/05-http-200-ok-response.png)
 
 ### Step 6 — TCP Connection Termination
 
@@ -213,90 +232,97 @@ Finally, inspected packets No. 10, 11, and 12.
 | 11 | Server → Kali | FIN, ACK |
 | 12 | Kali → Server | ACK |
 
-**Packet 10**
+**Packet 10 — FIN-ACK**
 
-Kali initiated graceful connection closure by sending FIN-ACK.
+Kali initiated graceful connection closure.
 
-**Packet 11**
+The FIN flag indicated that Kali had finished sending data.
 
-The server acknowledged the request and indicated that it had finished sending data.
+**Packet 11 — FIN-ACK**
 
-**Packet 12**
+The server acknowledged Kali's FIN and indicated that it had finished sending data.
+
+**Packet 12 — ACK**
 
 Kali acknowledged the server's FIN, completing the observed closing exchange.
 
 The FIN-ACK hexadecimal flag value was `0x11`.
 
-Wireshark also identified packet No. 10 as initiating the connection closure.
+Wireshark identified packet No. 10 as initiating the connection closure.
 
 **Evidence: TCP Connection Termination**
 
-![TCP FIN ACK and connection termination](05-tcp-connection-termination.png)
+![TCP FIN ACK and connection termination](evidence/05-tcp-connection-termination.png)
 
 ## 5. Observations
 
-The packet capture demonstrated the complete lifecycle of a TCP connection.
+The capture demonstrated the complete lifecycle of a TCP connection.
 
-- The client initiated communication using a temporary source port.
-- The TCP three-way handshake successfully established the connection.
+- Kali initiated communication using a temporary source port.
+- The server accepted the connection through the TCP three-way handshake.
 - TCP sequence and acknowledgment numbers confirmed the handshake progression.
-- An HTTP GET request was transmitted after connection establishment.
-- The server returned HTTP `200 OK`, indicating a successful HTTP response.
-- The connection closed gracefully using FIN and ACK packets.
-- Wireshark allowed inspection of decoded protocol fields and hexadecimal packet data.
+- Kali sent an HTTP GET request after establishing the connection.
+- The server returned HTTP `200 OK`.
+- The HTTP response contained HTML content.
+- TCP FIN and ACK flags were used for graceful connection termination.
+- Wireshark displayed both decoded protocol fields and hexadecimal packet data.
 
 ## 6. Troubleshooting and Notes
 
 **HTTP packets appearing with the TCP filter**
 
-Some packets were displayed as HTTP even though the `tcp` filter was applied. This happened because Wireshark recognized application-layer HTTP data carried over TCP.
+Although the `tcp` display filter was applied, some packets appeared as HTTP.
 
-**Sequence number differences**
+This happened because Wireshark recognized the HTTP application data carried inside TCP segments.
 
-Wireshark displayed relative sequence numbers rather than raw TCP sequence numbers, making the handshake easier to follow.
+**Relative sequence numbers**
+
+Wireshark displayed relative sequence numbers instead of the original raw TCP sequence numbers.
+
+This made the handshake easier to follow.
 
 **Evidence collection**
 
-Screenshots were captured for important observations rather than every individual packet, keeping the journal focused on meaningful findings.
+Screenshots were collected for the important stages of communication, including the handshake, HTTP exchange, and connection closure.
 
 ## 7. Real-World Cybersecurity Applications
 
 **Network Troubleshooting**
 
-TCP flags and acknowledgment numbers help identify connection failures, retransmissions, and abnormal connection behavior.
+TCP flags and acknowledgment numbers help identify failed connections, unexpected resets, and retransmissions.
 
 **Port Scanning**
 
-Understanding SYN and SYN-ACK packets provides a foundation for interpreting authorized Nmap TCP scan results.
+Understanding SYN and SYN-ACK packets helps explain how authorized TCP SYN scans work in Nmap.
 
 **Web Application Security**
 
-HTTP methods, headers, and response codes are essential when investigating application behavior using tools such as Burp Suite.
+HTTP methods, headers, and response codes are important when analyzing web applications using tools such as Burp Suite.
 
-**Traffic Analysis**
+**Network Traffic Investigation**
 
-Wireshark helps analysts reconstruct communication sequences and investigate suspicious or unexpected network activity.
+Wireshark allows security analysts to reconstruct communication sequences and investigate unusual network activity.
 
 ## 8. Key Learnings
 
 Through this lab, I learned:
 
 1. How TCP establishes a connection using SYN, SYN-ACK, and ACK.
-2. Why client and server port numbers are different.
-3. How TCP sequence and acknowledgment numbers work during connection establishment.
+2. How source and destination ports identify communication endpoints.
+3. How TCP sequence and acknowledgment numbers work.
 4. How HTTP requests and responses travel over TCP.
-5. How to interpret HTTP status codes such as `200 OK`.
+5. How to identify a successful HTTP response using status code `200`.
 6. How TCP gracefully closes connections using FIN and ACK.
-7. How to inspect protocol flags and packet data using Wireshark.
-8. How to document packet-level observations with reproducible evidence.
+7. How to inspect TCP flags and hexadecimal packet data in Wireshark.
+8. How to document network communication using packet-level evidence.
 
 ## 9. Conclusion
 
 Successfully captured and analyzed a complete TCP connection using Kali Linux and Wireshark.
 
-The investigation followed communication from the initial TCP SYN packet through the HTTP GET request, successful HTTP response, and graceful connection termination.
+The investigation followed the communication from the initial TCP SYN packet through the HTTP GET request, successful HTTP response, and graceful connection termination.
 
-The lab strengthened my understanding of transport-layer communication and provided practical experience relevant to network troubleshooting, traffic analysis, and web application security.
+This lab strengthened my understanding of TCP communication and provided practical experience relevant to network troubleshooting, web application security, and packet analysis.
 
 **Lab Status:** Completed  
 **Evidence Collected:** 6 screenshots  
